@@ -80,15 +80,24 @@ def SpotifyAuthorize():
   import requests
   import urllib
   import base64
+  import json
   global CONFIG
   authurl='https://accounts.spotify.com/api/token'
   grant_type='client_credentials'
   #It have to be added to the client valid redirect URIs
-  authorization=base64.encodestring(CONFIG['client_id'] + CONFIG['client_secret'])
-  response=requests.get(url=authurl,headers={"Authorization":authorization})
+  authorization=base64.encodestring(CONFIG['clientid'] + ":" + CONFIG['clientsecret']).replace("\n","")
+  headers={'Authorization': "Basic %s" % authorization}
+  data={"grant_type": grant_type}
+  response=requests.post(authurl,headers=headers,data=data)
   if response.status_code != 200:
     Message('Error %s authorizing. Response: %s' % ( response.status_code,response.text),FORCE=True)
     return False
+  Message("Response:\n%s" % response.text)
+  j=json.loads(response.text)
+  CONFIG['token']=j['access_token']
+  CONFIG['token_type']=j['token_type']
+  CONFIG['token_expires']=j['expires_in']
+  Message("Auth token: '%s'." % CONFIG['token'])
   return True
 def ReadClientAuth():
   global CONFIG
@@ -114,8 +123,28 @@ def ReadPlayList():
   f=open(CONFIG['playlistfile'],'r')
   CONFIG['playlist']=list()
   for line in f:
+    line=line.strip("\n")
     CONFIG['playlist'].append(line)
+    Message("Added item: '%s'" % line)
   f.close()
+  return True
+def ShowUserPlaylists():
+  global CONFIG
+  import requests
+  import json
+  url="https://api.spotify.com/v1/users/%s/playlists" % CONFIG['spotifyuser']
+  Message("URL: '%s'" % url)
+  headers={'Authorization':'%s %s' % (CONFIG['token_type'],CONFIG['token'])}
+  Message("Headers: '%s'" % headers)
+  limit=50
+  offset=0
+  params={'limit': limit,'offset': offset}
+  response=requests.get(url,headers=headers,params=params)
+  if response.status_code != 200:
+    Message('Error %s quering user playlists. Response: %s' % ( response.status_code,response.text),FORCE=True)
+    return False
+  Message("Response:\n%s" % response.text)
+  j=json.loads(response.text)
   return True
 Message('Getting configuration.')
 GetArguments()
@@ -131,6 +160,14 @@ if SpotifyAuthorize():
   Message('Reading M3U playlist.')
   if ReadPlayList():
     Message('Ok.')
+    Message('Showing your playlists:',FORCE=True)
+    if ShowUserPlaylists():
+      Message('Ok.')
+      Message("Enter a playlist id:",FORCE=True)
+      listid=raw_input()
+      Message("Selected list id '%s'" % listid,FORCE=True)
+    else:
+      Message('Failed.')
   else:
     Message('Failed.')
 else:
