@@ -6,7 +6,9 @@
 # https://developer.spotify.com/web-api/get-list-users-playlists/
 CONFIG=dict()
 CONFIG['baseurl']='https://api.spotify.com'
-CONFIG['clientidfile']='clientid'
+CONFIG['clientidfile']=''
+CONFIG['clientid']=''
+CONFIG['clientsecret']=''
 CONFIG['debug']=0
 CONFIG['playlistfile']=''
 CONFIG['config-file']=''
@@ -77,18 +79,13 @@ def ReadConfigFile(configfile):
 def SpotifyAuthorize():
   import requests
   import urllib
+  import base64
   global CONFIG
-  authurl='https://accounts.spotify.com/authorize'
-  response_type='code'
+  authurl='https://accounts.spotify.com/api/token'
+  grant_type='client_credentials'
   #It have to be added to the client valid redirect URIs
-  redirect_uri=urllib.quote_plus('https://github.com/ajdelgado/import_m3u_to_spotify.py')
-  state='#SomeHash'
-  #Scopes https://developer.spotify.com/web-api/using-scopes/
-  scope='playlist-modify-private%20playlist-read-private'
-  show_dialog='false'
-  full_url="%s/?client_id=%s&response_type=%s&redirect_uri=%s&scope=%s&state=%s" % (authurl,CONFIG['clientid'],response_type,redirect_uri,scope,state)
-  print full_url
-  response=requests.get(full_url)
+  authorization=base64.encodestring(CONFIG['client_id'] + CONFIG['client_secret'])
+  response=requests.get(url=authurl,headers={"Authorization":authorization})
   if response.status_code != 200:
     Message('Error %s authorizing. Response: %s' % ( response.status_code,response.text),FORCE=True)
     return False
@@ -120,13 +117,21 @@ def ReadPlayList():
     CONFIG['playlist'].append(line)
   f.close()
   return True
+Message('Getting configuration.')
 GetArguments()
-if ReadClientAuth():
-  SpotifyAuthorize()
-  if ReadPlayList():
-    print "ok"
+if CONFIG['clientidfile'] != '':
+  Message('Reading client identification from file "%s"' % CONFIG['clientidfile'])
+  if not ReadClientAuth():
+    Message('Failed.')
   else:
-    print "fail"
+    Message('Ok.')
+Message('Authenticating with Spotify.')
+if SpotifyAuthorize():
+  Message('Ok.')
+  Message('Reading M3U playlist.')
+  if ReadPlayList():
+    Message('Ok.')
+  else:
+    Message('Failed.')
 else:
-  print "fail"
-
+  Message('Failed.')
